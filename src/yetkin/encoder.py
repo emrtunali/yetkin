@@ -26,7 +26,9 @@ class TwoHeadTagger(nn.Module):
     def __init__(self, name: str, dropout: float = 0.1):
         super().__init__()
         self.name = name
-        self.encoder = AutoModel.from_pretrained(name)
+        # Some checkpoints (DeBERTa-v3) are stored in fp16 and recent transformers keep that dtype;
+        # mixed-precision training needs fp32 weights, so cast after loading.
+        self.encoder = AutoModel.from_pretrained(name).float()
         h = self.encoder.config.hidden_size
         self.drop = nn.Dropout(dropout)
         self.heads = nn.ModuleDict({t: nn.Linear(h, len(TAGS)) for t in TYPES})

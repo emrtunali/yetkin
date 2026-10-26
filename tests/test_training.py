@@ -43,6 +43,20 @@ def test_two_head_encoder_trains_saves_and_predicts(tmp_path):
 
 
 @pytest.mark.slow
+def test_fp16_checkpoint_trains_in_fp32(tmp_path):
+    """DeBERTa-v3 ships fp16 weights; GradScaler refuses to unscale fp16 gradients."""
+    from transformers import AutoModel, AutoTokenizer
+
+    from yetkin import encoder
+
+    name = "hf-internal-testing/tiny-random-BertModel"
+    AutoModel.from_pretrained(name).half().save_pretrained(tmp_path / "half")
+    AutoTokenizer.from_pretrained(name).save_pretrained(tmp_path / "half")
+    model = encoder.TwoHeadTagger(str(tmp_path / "half"))
+    assert all(p.dtype == torch.float32 for p in model.parameters())
+
+
+@pytest.mark.slow
 def test_lora_trains_and_extracts(tmp_path):
     from yetkin import llm
 
