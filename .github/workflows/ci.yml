@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: pip install -e ".[dev]" matplotlib
+      - name: Ruff
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: Notebooks are up to date
+        run: |
+          python scripts/make_notebooks.py
+          git diff --exit-code notebooks
+      - name: Tests (no GPU, no model downloads)
+        run: pytest -m "not slow"

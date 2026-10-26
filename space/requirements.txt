@@ -1,0 +1,2 @@
+yetkin[train] @ git+https://github.com/emrtunali/yetkin.git
+gradio>=4.40
