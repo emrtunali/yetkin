@@ -171,7 +171,7 @@ The base model is loaded in **4-bit NF4** and frozen; **LoRA adapters** (rank 16
 to answer with JSON (`{{"skills": [...], "knowledge": [...]}}`). The loss covers only the answer tokens. Answers are
 mapped back onto the sentence's tokens, so the score is computed exactly like the taggers'.
 
-About 1 hour on a T4 (training, then generating answers for the 3,569 test sentences).
+About 3 hours on a T4: 2.5 hours of training (610 steps), then generating answers for the 3,569 test sentences. Training is checkpointed to Drive, so after a disconnect *Run all* picks up where it stopped.
 """),
         SETUP,
         WANDB,
@@ -187,10 +187,9 @@ adapter = f"{OUT}/models/{slug}"
 if not os.path.exists(f"{adapter}/adapter_config.json"):
     run = wandb.init(project="yetkin", name=slug, config={"base": BASE, "r": R, "alpha": ALPHA, "epochs": EPOCHS, "lr": LR}) if wandb else None
     if torch.cuda.is_available(): torch.cuda.reset_peak_memory_stats()
-    t0 = time.time()
-    info = llm.qlora(BASE, train, adapter, epochs=EPOCHS, r=R, alpha=ALPHA, lr=LR,
+    # Checkpoints go to Drive every 50 steps; after a disconnect, Run all continues from the last one.
+    info = llm.qlora(BASE, train, adapter, epochs=EPOCHS, r=R, alpha=ALPHA, lr=LR, checkpoint_dir=f"{adapter}.checkpoint",
                      on_step=(lambda h: run.log(h)) if run else None)
-    info["train_minutes"] = round((time.time() - t0) / 60, 1)
     info["peak_gb"] = round(torch.cuda.max_memory_allocated() / 1e9, 2) if torch.cuda.is_available() else None
     json.dump({k: v for k, v in info.items() if k != "history"}, open(f"{adapter}/train_info.json", "w"), indent=1)
     if run: run.finish()

@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import math
 import random
+import shutil
+import time
+from pathlib import Path
 
 import torch
 import transformers
@@ -117,9 +120,16 @@ def qlora(
     max_length: int = 512,
     log=print,
     on_step=None,
+    checkpoint_dir: str | None = None,
+    save_every: int = 50,
 ) -> dict:
-    """Train LoRA adapters on (4-bit) ``name``; saves the adapter to ``out_dir``."""
-    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    """Train LoRA adapters on (4-bit) ``name``; saves the adapter to ``out_dir``.
+
+    With ``checkpoint_dir`` the adapter, optimizer and position are saved every ``save_every``
+    optimizer steps, and a later call with the same arguments continues from there: a Colab
+    disconnect costs minutes, not the run.
+    """
+    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, set_peft_model_state_dict
 
     random.seed(seed)
     torch.manual_seed(seed)
@@ -139,12 +149,28 @@ def qlora(
     opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=lr, weight_decay=0.0)
     steps = epochs * math.ceil(len(data) / (batch_size * grad_accum))
     sched = get_cosine_schedule_with_warmup(opt, int(0.05 * steps), steps)
-    history, step = [], 0
+    history, step, start, seconds = [], 0, (0, 0), 0.0
+    ckpt = Path(checkpoint_dir) if checkpoint_dir else None
+    found = ckpt and next(
+        (d for d in (ckpt, ckpt.with_name(ckpt.name + ".tmp")) if (d / "state.pt").exists()), None
+    )
+    if found:
+        from safetensors.torch import load_file
+
+        state = torch.load(found / "state.pt", map_location="cpu", weights_only=False)
+        set_peft_model_state_dict(model, load_file(found / "adapter_model.safetensors"))
+        opt.load_state_dict(state["opt"])
+        sched.load_state_dict(state["sched"])
+        history, step, start, seconds = state["history"], state["step"], state["next"], state["seconds"]
+        log(f"resuming at step {step}/{steps}")
+    t0 = time.time()
     model.train()
-    for epoch in range(epochs):
-        random.shuffle(data)
-        for i in range(0, len(data), batch_size):
-            batch = data[i : i + batch_size]
+    for epoch in range(start[0], epochs):
+        order = list(range(len(data)))
+        random.Random(seed + epoch).shuffle(order)  # the same order after a restart
+        epoch_data = [data[j] for j in order]
+        for i in range(start[1] if epoch == start[0] else 0, len(epoch_data), batch_size):
+            batch = epoch_data[i : i + batch_size]
             n = max(len(x["input_ids"]) for x in batch)
             ids = torch.tensor(
                 [x["input_ids"] + [tok.pad_token_id] * (n - len(x["input_ids"])) for x in batch],
@@ -157,7 +183,7 @@ def qlora(
             ).long()
             loss = model(input_ids=ids, attention_mask=att, labels=lab).loss / grad_accum
             loss.backward()
-            if (i // batch_size + 1) % grad_accum == 0 or i + batch_size >= len(data):
+            if (i // batch_size + 1) % grad_accum == 0 or i + batch_size >= len(epoch_data):
                 torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0)
                 opt.step()
                 sched.step()
@@ -174,10 +200,17 @@ def qlora(
                     on_step(rec)
                 if step % 20 == 0:
                     log(f"step {step}/{steps}  loss {rec['loss']:.4f}")
+                if ckpt and step % save_every == 0:
+                    nxt = (epoch, i + batch_size) if i + batch_size < len(epoch_data) else (epoch + 1, 0)
+                    _checkpoint(ckpt, model, opt, sched, history, step, nxt, seconds + time.time() - t0)
     model.save_pretrained(out_dir)
     tok.save_pretrained(out_dir)
+    if ckpt:
+        shutil.rmtree(ckpt, ignore_errors=True)
+        shutil.rmtree(ckpt.with_name(ckpt.name + ".tmp"), ignore_errors=True)
     return {
         "history": history,
+        "train_minutes": round((seconds + time.time() - t0) / 60, 1),
         "trainable": trainable,
         "total": total,
         "base": name,
@@ -185,3 +218,14 @@ def qlora(
         "alpha": alpha,
         "epochs": epochs,
     }
+
+
+def _checkpoint(path: Path, model, opt, sched, history, step, nxt, seconds) -> None:
+    """Write to a temporary folder, then swap it in, so a disconnect mid-save leaves the old one."""
+    tmp = path.with_name(path.name + ".tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    model.save_pretrained(tmp)
+    state = {"opt": opt.state_dict(), "sched": sched.state_dict(), "history": history}
+    torch.save({**state, "step": step, "next": nxt, "seconds": seconds}, tmp / "state.pt")
+    shutil.rmtree(path, ignore_errors=True)
+    tmp.rename(path)

@@ -16,7 +16,7 @@ at the level of exact token spans. The question this repository answers:
 | | Approach | What is trained | Notebook |
 |---|---|---|---|
 | 1 | **Fine-tuned encoder**, two BIO heads (skill, knowledge) on a shared body. JobBERT and DeBERTa-v3, 3 seeds each | the whole encoder (110–185 M parameters) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emrtunali/yetkin/blob/main/notebooks/01_encoder.ipynb) |
-| 2 | **QLoRA**: Qwen2.5-1.5B-Instruct in 4-bit, LoRA adapters on every linear layer, answering in JSON | about 1 % of the parameters | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emrtunali/yetkin/blob/main/notebooks/02_qlora.ipynb) |
+| 2 | **QLoRA**: Qwen2.5-1.5B-Instruct in 4-bit, LoRA adapters on every linear layer, answering in JSON | 18.5 M LoRA parameters, 1.2 % of 1.5 B | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emrtunali/yetkin/blob/main/notebooks/02_qlora.ipynb) |
 | 3 | **Prompting**: Qwen2.5-7B-Instruct in 4-bit, zero-shot and 5-shot | nothing | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emrtunali/yetkin/blob/main/notebooks/03_prompting.ipynb) |
 | – | **Lexicon**: every span seen in training, matched longest first | nothing | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emrtunali/yetkin/blob/main/notebooks/04_compare.ipynb) |
 

@@ -79,6 +79,30 @@ def test_lora_trains_and_extracts(tmp_path):
 
 
 @pytest.mark.slow
+def test_lora_resumes_from_a_checkpoint(tmp_path):
+    from yetkin import llm
+
+    class Disconnect(Exception):
+        pass
+
+    def stop_at_3(rec):
+        if rec["step"] == 3:
+            raise Disconnect
+
+    kw = dict(epochs=2, batch_size=4, grad_accum=1, four_bit=False, checkpoint_dir=str(tmp_path / "ckpt"))
+    kw["save_every"] = 2
+    name, data, out = "HuggingFaceTB/SmolLM2-135M-Instruct", SENTS[:12], str(tmp_path / "adapter")
+    with pytest.raises(Disconnect):
+        llm.qlora(name, data, out, on_step=stop_at_3, log=lambda *_: None, **kw)
+    assert (tmp_path / "ckpt" / "state.pt").exists()
+    lines = []
+    info = llm.qlora(name, data, out, log=lines.append, **kw)
+    assert "resuming at step 2/6" in lines
+    assert [h["step"] for h in info["history"]] == [1, 2, 3, 4, 5, 6]
+    assert not (tmp_path / "ckpt").exists() and (tmp_path / "adapter" / "adapter_config.json").exists()
+
+
+@pytest.mark.slow
 def test_prompt_masks_everything_but_the_answer():
     from transformers import AutoTokenizer
 
