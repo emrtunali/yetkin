@@ -135,11 +135,19 @@ for label, (base, lr) in MODELS.items():
 """),
         code("""
 # Keep the run with the best *dev* score (choosing on test would be cheating) and publish it if you like.
-import shutil
-if runs:
-    best = max(runs, key=lambda r: r["best_dev_f1"])
-    slug = f"{best['system'].lower().replace(' ', '-')}-seed{best['seed']}"
-    shutil.copytree(f"/content/runs/{slug}", f"{OUT}/models/encoder", dirs_exist_ok=True)
+# Every finished run is read back from Drive, so runs from an earlier session take part too.
+import glob, shutil
+from yetkin.io import load_predictions
+runs = []
+for path in sorted(glob.glob(f"{OUT}/predictions/*-seed*.jsonl")):
+    pred, meta = load_predictions(path)
+    runs.append({**meta, "slug": os.path.basename(path)[:-6], "test_f1": score([x.spans for x in test], pred)["strict_micro"]["f1"]})
+    print(f"{meta['name']:<26} dev {meta['best_dev_f1']:.3f}  test {runs[-1]['test_f1']:.3f}")
+best = max(runs, key=lambda r: r["best_dev_f1"])
+if not os.path.exists(f"/content/runs/{best['slug']}"):
+    print(f"The weights of {best['slug']} were on a session that ended: delete its predictions file and rerun.")
+else:
+    shutil.copytree(f"/content/runs/{best['slug']}", f"{OUT}/models/encoder", dirs_exist_ok=True)
     json.dump(best, open(f"{OUT}/models/encoder/run.json", "w"), indent=1)
     print("best on dev:", best["name"], f"(test {best['test_f1']:.3f})")
     if secret("HF_TOKEN"):
