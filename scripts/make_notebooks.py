@@ -29,12 +29,15 @@ def code(text: str) -> dict:
     }
 
 
-def notebook(cells: list[dict]) -> dict:
+def notebook(cells: list[dict], high_ram: bool = False) -> dict:
+    colab = {"gpuType": "T4", "provenance": []}
+    if high_ram:  # Colab's "High-RAM" switch; the 7B model does not load in the standard 12.7 GB
+        colab["machine_shape"] = "hm"
     return {
         "cells": cells,
         "metadata": {
             "accelerator": "GPU",
-            "colab": {"gpuType": "T4", "provenance": []},
+            "colab": colab,
             "kernelspec": {"display_name": "Python 3", "name": "python3"},
             "language_info": {"name": "python"},
         },
@@ -235,7 +238,9 @@ PROMPT = notebook(
 No training: the same instructions as the QLoRA model, answered by a 7B instruction model in 4-bit, **zero-shot**
 and with **five worked examples** from the training set. This is what "just ask an LLM" gets you.
 
-About 1.5–2 hours on a T4. Answers are saved in blocks of 500 sentences, so a disconnect loses at most one block.
+About 5–6 hours on a T4 (20 minutes per 500 sentences zero-shot, longer with five examples in the prompt), on a
+*High-RAM* runtime: the 7B model does not load in the standard 12.7 GB. Answers are saved in blocks of 500
+sentences, so after a disconnect *Run all* continues from the last block.
 """),
         SETUP,
         DATA,
@@ -275,7 +280,8 @@ def run(tag, shots):
 run("zero-shot", [])
 run("5-shot", SHOTS)
 """),
-    ]
+    ],
+    high_ram=True,
 )
 
 COMPARE = notebook(
