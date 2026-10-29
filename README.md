@@ -4,21 +4,20 @@
 ![python](https://img.shields.io/badge/python-3.10%E2%80%933.13-blue)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**Which skills does a job posting ask for? Three ways to extract them, measured on the same test set.**
+**Which skills does a job posting ask for? A fine-tuned encoder against a QLoRA-tuned small LLM, measured on the same test set.**
 
 *Yetkin* is Turkish for *competent*. Given a job posting, the task is to mark every **skill** (something a person
 does: *write clean code*, *manage stakeholders*) and every piece of **knowledge** (*Python*, *AWS*, *accounting*)
 at the level of exact token spans. The question this repository answers:
 
-> For skill extraction, should you fine-tune a small encoder, fine-tune a small LLM with QLoRA, or just prompt a
-> bigger LLM? And what does each cost?
+> For skill extraction, should you fine-tune a small encoder or fine-tune a small LLM with QLoRA? And what does
+> each cost?
 
 | | Approach | What is trained | Notebook |
 |---|---|---|---|
 | 1 | **Fine-tuned encoder**, two BIO heads (skill, knowledge) on a shared body. JobBERT and DeBERTa-v3, 3 seeds each | the whole encoder (110–185 M parameters) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emrtunali/yetkin/blob/main/notebooks/01_encoder.ipynb) |
 | 2 | **QLoRA**: Qwen2.5-1.5B-Instruct in 4-bit, LoRA adapters on every linear layer, answering in JSON | 18.5 M LoRA parameters, 1.2 % of 1.5 B | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emrtunali/yetkin/blob/main/notebooks/02_qlora.ipynb) |
-| 3 | **Prompting**: Qwen2.5-7B-Instruct in 4-bit, zero-shot and 5-shot | nothing | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emrtunali/yetkin/blob/main/notebooks/03_prompting.ipynb) |
-| – | **Lexicon**: every span seen in training, matched longest first | nothing | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emrtunali/yetkin/blob/main/notebooks/04_compare.ipynb) |
+| – | **Lexicon**: every span seen in training, matched longest first | nothing | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/emrtunali/yetkin/blob/main/notebooks/03_compare.ipynb) |
 
 All training runs on a free Colab T4. A demo for the best model runs on Hugging Face Spaces ([`space/`](space)).
 
@@ -28,12 +27,16 @@ SkillSpan test set: 3,569 sentences from 65 postings. Strict span F1 (exact boun
 intervals over postings. Full tables, loose F1, paired significance tests and the spread across seeds are written
 to [`results/RESULTS.md`](results/RESULTS.md) by the comparison notebook.
 
-| System | Strict F1 | 95 % interval | Status |
+| System | Strict F1 | 95 % interval | Per seed |
 |---|---:|---|---|
-| Lexicon (no learning) | 18.6 | 15.9–21.7 | measured |
-| JobBERT, DeBERTa-v3 (3 seeds each) | – | – | run notebook 1 |
-| QLoRA · Qwen2.5-1.5B | – | – | run notebook 2 |
-| Prompted · Qwen2.5-7B, 0- and 5-shot | – | – | run notebook 3 |
+| **QLoRA · Qwen2.5-1.5B** | **62.1** | – | one run |
+| DeBERTa-v3 (mean of 3 seeds) | 61.3 | – | 61.4 · 61.5 · 60.9 |
+| JobBERT (mean of 3 seeds) | 58.0 | – | 58.1 · 57.4 · 58.4 |
+| Lexicon (no learning) | 18.6 | 15.9–21.7 | – |
+
+The QLoRA-tuned 1.5B model and DeBERTa-v3 are within a point of each other, about the spread between DeBERTa
+seeds, so neither is clearly ahead until the paired bootstrap in the comparison notebook says so. Both beat
+JobBERT by three to four points. The model kept for the demo is DeBERTa-v3 seed 3, the best on dev.
 
 The lexicon is the floor: it knows every skill name in the training postings and still finds fewer than one
 span in five exactly, because the same words are a skill in one sentence and not in the next.

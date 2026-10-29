@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "yetkin"
 version = "0.1.0"
-description = "Skill and knowledge extraction from job postings: a fine-tuned encoder, a QLoRA-tuned small LLM and a prompted LLM, compared on SkillSpan."
+description = "Skill and knowledge extraction from job postings: a fine-tuned encoder and a QLoRA-tuned small LLM, compared on SkillSpan."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

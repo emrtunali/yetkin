@@ -8,8 +8,8 @@ import pytest
 NB = sorted((Path(__file__).resolve().parents[1] / "notebooks").glob("*.ipynb"))
 
 
-def test_four_notebooks_exist():
-    assert [p.stem for p in NB] == ["01_encoder", "02_qlora", "03_prompting", "04_compare"]
+def test_three_notebooks_exist():
+    assert [p.stem for p in NB] == ["01_encoder", "02_qlora", "03_compare"]
 
 
 @pytest.mark.parametrize("path", NB, ids=lambda p: p.stem)

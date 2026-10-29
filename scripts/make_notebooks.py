@@ -29,15 +29,12 @@ def code(text: str) -> dict:
     }
 
 
-def notebook(cells: list[dict], high_ram: bool = False) -> dict:
-    colab = {"gpuType": "T4", "provenance": []}
-    if high_ram:  # Colab's "High-RAM" switch; the 7B model does not load in the standard 12.7 GB
-        colab["machine_shape"] = "hm"
+def notebook(cells: list[dict]) -> dict:
     return {
         "cells": cells,
         "metadata": {
             "accelerator": "GPU",
-            "colab": colab,
+            "colab": {"gpuType": "T4", "provenance": []},
             "kernelspec": {"display_name": "Python 3", "name": "python3"},
             "language_info": {"name": "python"},
         },
@@ -228,68 +225,12 @@ if secret("HF_TOKEN"):
     ]
 )
 
-PROMPT = notebook(
-    [
-        md(f"""
-# 3 · A larger LLM, prompted only
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/{REPO}/blob/main/notebooks/03_prompting.ipynb)
-
-No training: the same instructions as the QLoRA model, answered by a 7B instruction model in 4-bit, **zero-shot**
-and with **five worked examples** from the training set. This is what "just ask an LLM" gets you.
-
-About 5–6 hours on a T4 (20 minutes per 500 sentences zero-shot, longer with five examples in the prompt), on a
-*High-RAM* runtime: the 7B model does not load in the standard 12.7 GB. Answers are saved in blocks of 500
-sentences, so after a disconnect *Run all* continues from the last block.
-"""),
-        SETUP,
-        DATA,
-        code("""
-import random
-BASE = "Qwen/Qwen2.5-7B-Instruct"
-both = [s for s in train if s.of("skill") and s.of("knowledge") and len(s.tokens) <= 40]
-SHOTS = random.Random(0).sample(both, 5)
-for s in SHOTS: print("·", " ".join(s.tokens))
-"""),
-        code("""
-from yetkin import llm
-from yetkin.io import save_predictions, load_predictions
-from yetkin.data import Span
-model, tok = llm.load(BASE, four_bit=True)
-
-def run(tag, shots):
-    final = f"{OUT}/predictions/prompt-{tag}.jsonl"
-    if os.path.exists(final):
-        print("done already:", final); return
-    parts, t0 = [], time.time()
-    for b in range(0, len(test), 500):
-        part = f"{OUT}/predictions/.prompt-{tag}-{b:05d}.jsonl"
-        block = test[b:b + 500]
-        if not os.path.exists(part):
-            pred, raw = llm.extract(model, tok, block, shots=shots, batch_size=16)
-            save_predictions(part, block, pred, raw=raw)
-            print(f"{tag}: {b + len(block)}/{len(test)}")
-        parts.append(part)
-    pred = [p for part in parts for p in load_predictions(part)[0]]
-    per_1k = (time.time() - t0) / len(test) * 1000
-    label = "zero-shot" if not shots else f"{len(shots)}-shot"
-    save_predictions(final, test, pred, meta={"name": f"Prompted · {BASE.split('/')[-1]} · {label}", "system": f"Prompted {label}",
-                                               "base": BASE, "shots": len(shots), "seconds_per_1k_sentences": round(per_1k, 1)})
-    for p in parts: os.remove(p)
-
-run("zero-shot", [])
-run("5-shot", SHOTS)
-"""),
-    ],
-    high_ram=True,
-)
-
 COMPARE = notebook(
     [
         md(f"""
-# 4 · Compare everything
+# 3 · Compare everything
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/{REPO}/blob/main/notebooks/04_compare.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/{REPO}/blob/main/notebooks/03_compare.ipynb)
 
 Scores every prediction file in Drive on the test set: strict and loose F1, 95 % intervals over postings, a paired
 bootstrap against the best system and the spread across seeds. No GPU needed.
@@ -335,8 +276,7 @@ def main() -> None:
     for name, nb in (
         ("01_encoder", ENCODER),
         ("02_qlora", QLORA),
-        ("03_prompting", PROMPT),
-        ("04_compare", COMPARE),
+        ("03_compare", COMPARE),
     ):
         (out / f"{name}.ipynb").write_text(json.dumps(nb, indent=1, ensure_ascii=False) + "\n")
         print("wrote", f"notebooks/{name}.ipynb")
